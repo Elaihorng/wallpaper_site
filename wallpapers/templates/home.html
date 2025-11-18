@@ -1,0 +1,318 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<!-- Tailwind CDN (dev) -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+  <!-- HERO -->
+  <header class="relative mt-8 rounded-lg overflow-hidden bg-neutral-900 text-white">
+    {% load static %}
+    <div class="absolute inset-0 bg-[url('{% static "hero.jpg" %}')] bg-cover bg-center opacity-30"></div>
+
+    <div class="relative z-10 px-6 py-16 sm:py-24">
+      <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight">Creative wallpapers, reimagined</h1>
+      <p class="mt-4 max-w-2xl text-gray-200">Beautiful curated wallpapers — free previews and premium downloads for subscribers.</p>
+
+      <div class="mt-6 flex flex-col sm:flex-row gap-3">
+
+        {% if not user.is_authenticated %}
+        <a href="{% url 'wallpapers:register' %}" 
+           class="inline-flex items-center justify-center rounded-full bg-white text-neutral-900 px-4 py-2 shadow hover:opacity-95">
+          Get started for free
+        </a>
+        {% endif %}
+
+        <form method="get" action="{% url 'wallpapers:home' %}" class="sm:ml-4 w-full sm:w-auto">
+          <div class="flex items-center w-full sm:w-96 bg-white/80 backdrop-blur-md rounded-full shadow-md
+                      border border-white/40 focus-within:ring-2 focus-within:ring-blue-500 transition">
+            <span class="px-4 text-neutral-500">
+              <!-- search icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M10.5 18.9a7.5 7.5 0 100-15 7.5 7.5 0 000 15z"/>
+              </svg>
+            </span>
+
+            <input
+              name="q"
+              value="{{ request.GET.q|default:'' }}"
+              placeholder="Search wallpapers..."
+              class="flex-grow bg-transparent px-2 py-3 text-neutral-900 placeholder-neutral-500 focus:outline-none"
+              type="search"
+              aria-label="Search wallpapers"
+            />
+
+            <button type="submit"
+              class="mx-2 px-4 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition active:scale-[0.97]">
+              Search
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+</header>
+
+
+  <!-- FEATURED CAROUSEL -->
+   {% if not request.GET.q %}
+    <section class="mt-10">
+      <h2 class="text-xl font-semibold mb-4">Featured</h2>
+
+      <div class="relative" x-data="carousel()">
+        <!-- viewport -->
+        <div id="featured-carousel" class="overflow-hidden relative rounded-lg">
+          <div id="track" class="flex transition-transform duration-700 ease-in-out will-change-transform">
+            {% for w in wallpapers|slice:":6" %}
+              <article class="carousel-item flex-shrink-0 p-3" style="width:100%;">
+                <div class="relative w-full" style="padding-top: 50%;">
+                <img 
+                    src="{{ w.image.url }}" 
+                    alt="{{ w.title }}"
+                    class="absolute inset-0 w-full h-full object-cover rounded-lg"
+                  >
+                </div>
+              </article>
+            {% empty %}
+              <p class="text-gray-500 px-4">No featured wallpapers yet.</p>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- arrows -->
+        <button id="prevBtn" aria-label="Previous" class="absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-2 rounded-full shadow hidden sm:inline-flex z-20">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+        </button>
+        <button id="nextBtn" aria-label="Next" class="absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-2 rounded-full shadow hidden sm:inline-flex z-20">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+        </button>
+
+        <!-- indicators -->
+        <div id="dots" class="mt-3 flex items-center justify-center gap-2"></div>
+      </div>
+
+      <style>
+        /* adjust number of visible slides per breakpoint */
+        @media (min-width: 640px) { .carousel-item { width: 50%; } }   /* 2 per view on sm+ */
+        @media (min-width: 1024px) { .carousel-item { width: 33.3333%; } } /* 3 per view on lg+ */
+
+        /* hide scrollbar */
+        #featured-carousel::-webkit-scrollbar { display: none; }
+      </style>
+
+      <script>
+        (function () {
+          const track = document.getElementById('track');
+          const prevBtn = document.getElementById('prevBtn');
+          const nextBtn = document.getElementById('nextBtn');
+          const dotsWrap = document.getElementById('dots');
+          const items = Array.from(track.querySelectorAll('.carousel-item'));
+          if (!track || items.length === 0) return;
+
+          let index = 0;
+          let autoplay = true;
+          const autoplayDelay = 3500; // ms
+          let autoplayTimer = null;
+          let itemWidth = items[0].getBoundingClientRect().width;
+          let perView = computePerView();
+
+          // create dots
+          const slideCount = Math.ceil(items.length / perView);
+          const dots = [];
+          for (let i = 0; i < slideCount; i++) {
+            const d = document.createElement('button');
+            d.className = 'w-2 h-2 rounded-full bg-gray-300';
+            d.setAttribute('aria-label', 'Go to slide ' + (i+1));
+            d.addEventListener('click', () => { goTo(i); resetAutoplay(); });
+            dotsWrap.appendChild(d);
+            dots.push(d);
+          }
+
+          function updateDots() {
+            dots.forEach((d, i) => d.classList.toggle('bg-gray-700', i === index));
+          }
+
+          function computePerView() {
+            const w = window.innerWidth;
+            if (w >= 1024) return 3;
+            if (w >= 640) return 2;
+            return 1;
+          }
+
+          function sizeRefresh() {
+            itemWidth = items[0].getBoundingClientRect().width;
+            perView = computePerView();
+            // recalc slides/dots if viewport changed
+            const newSlideCount = Math.ceil(items.length / perView);
+            if (newSlideCount !== dots.length) {
+              dotsWrap.innerHTML = '';
+              while (dotsWrap.firstChild) dotsWrap.removeChild(dotsWrap.firstChild);
+              // recreate
+              for (let i = 0; i < newSlideCount; i++) {
+                const d = document.createElement('button');
+                d.className = 'w-2 h-2 rounded-full bg-gray-300';
+                d.addEventListener('click', () => { goTo(i); resetAutoplay(); });
+                dotsWrap.appendChild(d);
+                dots.push(d);
+              }
+            }
+            goTo(index, false);
+          }
+
+          function goTo(i, smooth=true) {
+            const maxIndex = Math.max(0, Math.ceil(items.length / perView) - 1);
+            index = Math.max(0, Math.min(i, maxIndex));
+            const scrollX = index * itemWidth * perView;
+            track.style.scrollBehavior = smooth ? 'smooth' : 'auto';
+            track.style.transform = `translateX(-${scrollX}px)`;
+            updateDots();
+          }
+
+          function next() {
+            const maxIndex = Math.max(0, Math.ceil(items.length / perView) - 1);
+            goTo(index === maxIndex ? 0 : index + 1);
+          }
+          function prev() {
+            const maxIndex = Math.max(0, Math.ceil(items.length / perView) - 1);
+            goTo(index === 0 ? maxIndex : index - 1);
+          }
+
+          function startAutoplay() {
+            if (!autoplay) return;
+            stopAutoplay();
+            autoplayTimer = setInterval(next, autoplayDelay);
+          }
+          function stopAutoplay() {
+            if (autoplayTimer) { clearInterval(autoplayTimer); autoplayTimer = null; }
+          }
+          function resetAutoplay() { stopAutoplay(); startAutoplay(); }
+
+          // arrow handlers
+          nextBtn.addEventListener('click', () => { next(); resetAutoplay(); });
+          prevBtn.addEventListener('click', () => { prev(); resetAutoplay(); });
+
+          // pause on hover/focus
+          const container = document.getElementById('featured-carousel');
+          container.addEventListener('mouseenter', stopAutoplay);
+          container.addEventListener('mouseleave', startAutoplay);
+          container.addEventListener('focusin', stopAutoplay);
+          container.addEventListener('focusout', startAutoplay);
+
+          // keyboard support
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') { prev(); resetAutoplay(); }
+            if (e.key === 'ArrowRight') { next(); resetAutoplay(); }
+          });
+
+          // touch swipe
+          let startX = 0, dx = 0, isTouch = false;
+          track.addEventListener('touchstart', (ev) => { isTouch = true; startX = ev.touches[0].clientX; stopAutoplay(); }, {passive:true});
+          track.addEventListener('touchmove', (ev) => { if(!isTouch) return; dx = ev.touches[0].clientX - startX; }, {passive:true});
+          track.addEventListener('touchend', () => {
+            if (!isTouch) return;
+            if (Math.abs(dx) > 50) {
+              if (dx < 0) next(); else prev();
+            }
+            dx = 0; isTouch = false; resetAutoplay();
+          });
+
+          // window resize -> recompute sizes
+          let resizeTimeout;
+          window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(sizeRefresh, 120);
+          });
+
+          // init
+          sizeRefresh();
+          updateDots();
+          startAutoplay();
+        })();
+      </script>
+    </section>
+    {% endif %}
+
+    
+  <!-- GRID -->
+  <!-- GRID -->
+<section class="mt-12">
+  
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+      <h2 class="text-2xl font-semibold text-gray-900">Latest Wallpapers</h2>
+      <p class="text-sm text-gray-500">{{ wallpapers.count }} items</p>
+  </div>
+
+  <!-- Grid -->
+  <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    {% for w in wallpapers %}
+      <article 
+        class="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300">
+        
+        <!-- Image wrapper -->
+        <a href="{% url 'wallpapers:wallpaper_preview' w.pk %}" 
+           class="block relative group">
+
+          <!-- Image -->
+          <img src="{{ w.image.url }}" 
+               alt="{{ w.title }}"
+               loading="lazy"
+               class="w-full h-56 object-cover rounded-t-xl transform group-hover:scale-[1.05] transition duration-300">
+
+          <!-- Premium / Free Badge -->
+          {% if w.is_premium %}
+            <span class="absolute top-3 right-3 bg-amber-300 text-black text-xs font-semibold px-2.5 py-1.5 rounded-md shadow">
+              Premium
+            </span>
+          {% else %}
+            <span class="absolute top-3 right-3 bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1.5 rounded-md shadow">
+              Free
+            </span>
+          {% endif %}
+        </a>
+
+        <!-- Content -->
+        {% comment %} <div class="p-4">
+          <h4 class="text-base font-medium text-gray-900 truncate">
+            {{ w.title }}
+          </h4>
+        </div> {% endcomment %}
+      </article>
+    {% empty %}
+      <p class="text-gray-500">No wallpapers available.</p>
+    {% endfor %}
+  </div>
+</section>
+
+
+
+</div>
+<script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+<!-- Simple carousel controls -->
+<script>
+  (function () {
+    const track = document.getElementById('carousel');
+    const next = document.getElementById('next');
+    const prev = document.getElementById('prev');
+    if (!track) return;
+
+    function slide(delta) {
+      // simple scroll by container width
+      const width = track.clientWidth;
+      track.scrollBy({ left: width * delta, behavior: 'smooth' });
+    }
+    if (next) next.addEventListener('click', () => slide(1));
+    if (prev) prev.addEventListener('click', () => slide(-1));
+  })();
+
+  {% comment %} document.addEventListener("contextmenu", function(e) {
+    e.preventDefault();
+  });
+
+document.querySelectorAll('img').forEach(img => {
+      img.addEventListener('contextmenu', e => e.preventDefault());
+  }); {% endcomment %}
+</script>
+
+{% endblock %}

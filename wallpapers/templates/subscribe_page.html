@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-md border border-gray-100 mt-8">
+
+    <h2 class="text-3xl font-semibold mb-8 text-center tracking-tight">
+        Choose Your Plan
+    </h2>
+
+    <!-- GRID: 2 columns on md+ -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- BASIC PLAN -->
+        <div class="border rounded-2xl p-5 hover:shadow-md transition">
+            <p class="text-xl font-semibold text-gray-900">Basic</p>
+            <p class="text-sm text-gray-600 mt-1">Download up to 10 premium images</p>
+            <p class="text-2xl font-bold mt-3">$1.50 
+                <span class="text-sm font-medium text-gray-500">/ month</span>
+            </p>
+
+            <form method="POST" action="{% url 'wallpapers:create_checkout_session' %}" class="mt-5">
+                {% csrf_token %}
+                <input type="hidden" name="plan" value="basic">
+                <button type="submit"
+                    class="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 active:scale-[0.98] transition">
+                    Subscribe to Basic
+                </button>
+            </form>
+        </div>
+
+        <!-- PRO PLAN -->
+        <div class="border rounded-2xl p-5 hover:shadow-md transition">
+            <p class="text-xl font-semibold text-gray-900">Pro</p>
+            <p class="text-sm text-gray-600 mt-1">Unlimited premium downloads</p>
+            <p class="text-2xl font-bold mt-3">$10 
+                <span class="text-sm font-medium text-gray-500">/ month</span>
+            </p>
+
+            <form method="POST" action="{% url 'wallpapers:create_checkout_session' %}" class="mt-5">
+                {% csrf_token %}
+                <input type="hidden" name="plan" value="pro">
+                <button type="submit"
+                    class="w-full bg-emerald-600 text-white py-2.5 rounded-lg hover:bg-emerald-700 active:scale-[0.98] transition">
+                    Subscribe to Pro
+                </button>
+            </form>
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

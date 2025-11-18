@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>{{ w.title }}</h2>
+
+<a href="{% url 'wallpapers:wallpaper_preview' w.pk %}">
+  <img src="{{ w.image.url }}" alt="{{ w.title }}" class="max-w-full">
+</a>
+
+<br><br>
+
+{% if user.is_authenticated %}
+    <a href="{% url 'wallpapers:download_wallpaper' w.pk %}">Download</a>
+{% else %}
+    <a href="{% url 'wallpapers:login' %}">Login to download</a>
+{% endif %}
+{% endblock %}
