@@ -62,68 +62,55 @@ TEMPLATES = [
 WSGI_APPLICATION = "wallpaper_site.wsgi.application"
 
 # Database: prefer DATABASE_URL (dj-database-url), else explicit MySQL vars
+def _write_ca_file(env_val):
+    ca_path = Path(tempfile.gettempdir()) / "aiven_mysql_ca.pem"
+    # restore real newlines if user stored escaped \n
+    ca_text = env_val.replace("\\n", "\n")
+    ca_path.write_text(ca_text)
+    return str(ca_path)
+
 if os.getenv("DATABASE_URL"):
     DATABASES = {"default": dj_database_url.parse(os.getenv("DATABASE_URL"), conn_max_age=600)}
-else:
-    # If Aiven requires SSL CA, we can write it to a temp file and reference it below
-    db_options = {}
-    db_ssl_ca = os.getenv("DATABASE_SSL_CA")  # put raw CA PEM into this env var if needed
-    if db_ssl_ca:
-        ca_file = Path(tempfile.gettempdir()) / "aiven_mysql_ca.pem"
-        ca_file.write_text(db_ssl_ca)
-        db_options["ssl"] = {"ca": str(ca_file)}
+    opts = DATABASES["default"].get("OPTIONS", {}) or {}
 
-   
-
-    if os.getenv("DATABASE_URL"):
-        # parse DATABASE_URL first
-        DATABASES = {"default": dj_database_url.parse(os.getenv("DATABASE_URL"), conn_max_age=600)}
-        # dj-database-url may set OPTIONS like {'ssl-mode': 'REQUIRED'} which mysqlclient doesn't accept.
-        opts = DATABASES["default"].get("OPTIONS", {})
-
-        # If dj-database-url created 'ssl-mode', remove it and convert to proper 'ssl' dict if we have CA
-        ssl_mode = opts.pop("ssl-mode", opts.pop("ssl_mode", None))
-        if ssl_mode:
-            # if user provided DATABASE_SSL_CA env, write it out and add it to OPTIONS['ssl']
-            db_ssl_ca = os.getenv("DATABASE_SSL_CA")
-            if db_ssl_ca:
-                ca_file = Path(tempfile.gettempdir()) / "aiven_mysql_ca.pem"
-                ca_file.write_text(db_ssl_ca.replace("\\n", "\n"))  # restore newlines if stored escaped
-                opts.setdefault("ssl", {})["ca"] = str(ca_file)
-            else:
-                # If no CA, you can still keep ssl_mode by converting to underscore form
-                opts["ssl_mode"] = ssl_mode
-
-        # If DATABASE_SSL_CA present but dj-database-url didn't add ssl, ensure we attach the CA
-        if "ssl" not in opts and os.getenv("DATABASE_SSL_CA"):
-            ca_file = Path(tempfile.gettempdir()) / "aiven_mysql_ca.pem"
-            ca_file.write_text(os.getenv("DATABASE_SSL_CA").replace("\\n", "\n"))
-            opts.setdefault("ssl", {})["ca"] = str(ca_file)
-
-        # write back cleaned options
-        DATABASES["default"]["OPTIONS"] = opts
-
-    else:
-        # fallback to explicit env vars (keeps your previous logic)
-        db_options = {}
+    # convert any ssl-mode / ssl_mode into proper form
+    ssl_mode_val = opts.pop("ssl-mode", None) or opts.pop("ssl_mode", None)
+    if ssl_mode_val:
+        # if CA provided, attach to OPTIONS['ssl']['ca']
         db_ssl_ca = os.getenv("DATABASE_SSL_CA")
         if db_ssl_ca:
-            ca_file = Path(tempfile.gettempdir()) / "aiven_mysql_ca.pem"
-            ca_file.write_text(db_ssl_ca.replace("\\n", "\n"))
-            db_options["ssl"] = {"ca": str(ca_file)}
+            ca_file = _write_ca_file(db_ssl_ca)
+            opts.setdefault("ssl", {})["ca"] = ca_file
+        else:
+            # fallback: pass underscore form
+            opts["ssl_mode"] = ssl_mode_val
 
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.mysql",
-                "NAME": os.getenv("DATABASE_NAME", "wallpapers"),
-                "USER": os.getenv("DATABASE_USER", "kenn"),
-                "PASSWORD": os.getenv("DATABASE_PASSWORD", "123"),
-                "HOST": os.getenv("DATABASE_HOST", "localhost"),
-                "PORT": os.getenv("DATABASE_PORT", "3306"),
-                "OPTIONS": db_options,
-                "CONN_MAX_AGE": int(os.getenv("CONN_MAX_AGE", 600)),
-            }
+    # if user provided CA env but no ssl present, attach CA
+    if "ssl" not in opts and os.getenv("DATABASE_SSL_CA"):
+        ca_file = _write_ca_file(os.getenv("DATABASE_SSL_CA"))
+        opts.setdefault("ssl", {})["ca"] = ca_file
+
+    DATABASES["default"]["OPTIONS"] = opts
+
+else:
+    # explicit env var configuration
+    db_options = {}
+    if os.getenv("DATABASE_SSL_CA"):
+        ca_file = _write_ca_file(os.getenv("DATABASE_SSL_CA"))
+        db_options["ssl"] = {"ca": ca_file}
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.getenv("DATABASE_NAME", "wallpapers"),
+            "USER": os.getenv("DATABASE_USER", "kenn"),
+            "PASSWORD": os.getenv("DATABASE_PASSWORD", "123"),
+            "HOST": os.getenv("DATABASE_HOST", "localhost"),
+            "PORT": os.getenv("DATABASE_PORT", "3306"),
+            "OPTIONS": db_options,
+            "CONN_MAX_AGE": int(os.getenv("CONN_MAX_AGE", 600)),
         }
+    }
     # -------------------------------------------------------------------
 
 # Password validation: keep minimal in dev or enable in prod as you prefer
