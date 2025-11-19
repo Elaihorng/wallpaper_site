@@ -1,14 +1,29 @@
-myvenv/
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+myvenv/
+
+# SQLite (not used in production)
 db.sqlite3
+
+# Environment variables
 .env
-media/
+
+# Django static/media
 staticfiles/
-.env
-myvenv/
-myvenv/
-__pycache__/
-*.pyc
-.env
+media/
+
+# macOS
 .DS_Store
+
+# VSCode
+.vscode/
+
+# Python debug files
+*.log

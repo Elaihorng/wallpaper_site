@@ -16,7 +16,18 @@
   </a>
 
   <h2 class="text-2xl font-bold mb-4">{{ w.title }}</h2>
+  <div id="centerPopup"
+     class="fixed inset-0 z-50 hidden bg-black bg-opacity-40 flex items-center justify-center">
+  
+    <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm text-center">
+      <p id="popupMessage" class="text-gray-800 text-base font-medium mb-6"></p>
 
+      <button onclick="closeCenterPopup()"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:opacity-90">
+        OK
+      </button>
+    </div>
+  </div>
   <!-- Preview card -->
   <div class="relative rounded-lg overflow-hidden shadow-lg p-3 bg-white">
     {% if w.is_premium %}
@@ -40,76 +51,83 @@
 
     <div class="mt-4 flex items-center justify-between gap-4">
       <div>
-        {% comment %} Download / Subscribe buttons {% endcomment %}
-        {% with sub=request.user.subscription %}
-          {% if w.is_premium %}
-            {% if request.user.is_authenticated and sub and sub.status == 'active' %}
-              <!-- ACTIVE SUBSCRIBER (basic or pro) -->
-              <a href="{% url 'wallpapers:download_wallpaper' w.pk %}"
-                 class="inline-block px-4 py-2 bg-blue-600 text-white rounded shadow">Download</a>
+        {# Download / Subscribe buttons #}
+        {% if request.user.is_authenticated %}
+          {% with sub=request.user.subscription %}
+            {% if w.is_premium %}
+              {% if sub and sub.status == 'active' %}
+                <!-- ACTIVE SUBSCRIBER (basic or pro) -->
+                <button id="downloadBtn" data-pk="{{ w.pk }}" class="inline-block px-4 py-2 bg-blue-600 text-white rounded shadow">
+                  Download
+                </button>
 
-              {% if sub.plan == 'basic' %}
-                <p class="text-xs text-gray-600 mt-1">
-                  Basic remaining: {{ sub.downloads_remaining }}
-                </p>
+
+                {% if sub.plan == 'basic' %}
+                  <p class="text-xs text-gray-600 mt-1">
+                    Basic remaining: <span id="basic-remaining">{{ sub.downloads_remaining }}</span>
+                  </p>
+                {% endif %}
+
+              {% else %}
+                <!-- Logged in but no active sub -->
+                <a href="{% url 'wallpapers:subscribe_page' %}"
+                   class="inline-block px-4 py-2 bg-amber-500 text-white rounded">Subscribe to Download</a>
               {% endif %}
-
-            {% elif request.user.is_authenticated %}
-              <!-- Logged in but no active sub -->
-              <a href="{% url 'wallpapers:subscribe_page' %}"
-                 class="inline-block px-4 py-2 bg-amber-500 text-white rounded">Subscribe to Download</a>
-
             {% else %}
-              <!-- Guest -->
-              <a href="{% url 'wallpapers:login' %}?next={{ request.path }}"
-                 class="inline-block px-4 py-2 bg-blue-600 text-white rounded">Login to Download</a>
-            {% endif %}
-          {% else %}
-            <!-- Free wallpaper -->
-            {% if request.user.is_authenticated %}
+              <!-- Free wallpaper for logged in user -->
               <a href="{% url 'wallpapers:download_wallpaper' w.pk %}"
                  class="inline-block px-4 py-2 bg-blue-600 text-white rounded">Download</a>
-            {% else %}
-              <a href="{% url 'wallpapers:login' %}?next={{ request.path }}"
-                 class="inline-block px-4 py-2 bg-blue-600 text-white rounded">Login to Download</a>
             {% endif %}
+          {% endwith %}
+        {% else %}
+          {# guest user #}
+          {% if w.is_premium %}
+            <a href="{% url 'wallpapers:login' %}?next={{ request.path }}"
+               class="inline-block px-4 py-2 bg-blue-600 text-white rounded">Login to Download</a>
+          {% else %}
+            <a href="{% url 'wallpapers:login' %}?next={{ request.path }}"
+               class="inline-block px-4 py-2 bg-blue-600 text-white rounded">Login to Download</a>
           {% endif %}
-        {% endwith %}
+        {% endif %}
       </div>
 
       <div class="text-sm text-gray-600 text-right">
-        {% comment %} <p>Uploaded by: <span class="font-medium text-gray-800">{{ w.uploaded_by.username|default:"Unknown" }}</span></p> {% endcomment %}
         <p class="text-xs mt-1">{{ w.created_at|date:"F j, Y" }}</p>
       </div>
     </div>
 
-    <!-- ----------- FIXED OVERLAY ----------- -->
-    {% with sub=request.user.subscription %}
-      {% if w.is_premium %}
-        {% if request.user.is_authenticated and request.user.user_type == 'pro' and request.user.subscription and request.user.subscription.status == 'active' %}
-          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div class="backdrop-blur-md bg-black/50 text-white p-6 rounded-lg text-center max-w-lg pointer-events-auto">
-
-              <p class="text-lg mb-4">Premium image — subscribe to download</p>
-
-              {% if request.user.is_authenticated %}
-                <a href="{% url 'wallpapers:subscribe_page' %}"
-                   class="px-4 py-2 rounded bg-emerald-600">Subscribe</a>
-              {% else %}
-                <div class="flex items-center justify-center gap-3">
-                  <a href="{% url 'wallpapers:login' %}?next={{ request.path }}"
-                     class="px-4 py-2 rounded bg-blue-600 text-white">Login</a>
-                  <a href="{% url 'wallpapers:register' %}"
-                     class="px-4 py-2 rounded bg-amber-500">Register</a>
-                </div>
-              {% endif %}
-
+    <!-- ----------- FIXED OVERLAY: show when NOT an active subscriber ----------- -->
+    {% if w.is_premium %}
+      {% if not request.user.is_authenticated %}
+        <!-- guest: prompt login/register -->
+        <div class="absolute inset-0 flex items-center justify-center">
+          <div class="backdrop-blur-md bg-black/50 text-white p-6 rounded-lg text-center max-w-lg">
+            <p class="text-lg mb-4">Premium image — subscribe to download</p>
+            <div class="flex items-center justify-center gap-3">
+              <a href="{% url 'wallpapers:login' %}?next={{ request.path }}"
+                 class="px-4 py-2 rounded bg-blue-600 text-white">Login</a>
+              <a href="{% url 'wallpapers:register' %}"
+                 class="px-4 py-2 rounded bg-amber-500">Register</a>
             </div>
           </div>
-        {% endif %}
+        </div>
+
+      {% else %}
+        {% with sub=request.user.subscription %}
+          {% if not sub or sub.status != 'active' %}
+            <!-- logged-in but not active subscriber: prompt subscribe -->
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="backdrop-blur-md bg-black/50 text-white p-6 rounded-lg text-center max-w-lg">
+                <p class="text-lg mb-4">Premium image — subscribe to download</p>
+                <a href="{% url 'wallpapers:subscribe_page' %}"
+                   class="px-4 py-2 rounded bg-emerald-600 text-white inline-block">Subscribe</a>
+              </div>
+            </div>
+          {% endif %}
+        {% endwith %}
       {% endif %}
-    {% endwith %}
-    <!-- -------- END OVERLAY FIX -------- -->
+    {% endif %}
+    <!-- -------- END OVERLAY -------- -->
 
   </div>
 
@@ -141,6 +159,72 @@
 </div>
 
 <script>
+
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+const csrftoken = getCookie('csrftoken');
+
+document.getElementById('downloadBtn')?.addEventListener('click', async function (e) {
+  e.preventDefault();
+  const pk = this.dataset.pk;
+  const url = "{% url 'wallpapers:initiate_download' 0 %}".replace('/0/', '/' + pk + '/');
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrftoken,
+        'Accept': 'application/json',
+      },
+      body: ''  // no body needed
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+    if (data.error === 'quota_exhausted') {
+      showCenterPopup('Quota exhausted. Upgrade to Pro.');
+      return;
+    } 
+    else if (data.error === 'no_active_subscription') {
+      showCenterPopup('No active subscription. Please subscribe.');
+      setTimeout(() => {
+        window.location.href = "{% url 'wallpapers:subscribe_page' %}";
+      }, 1500);
+    }
+    else {
+      showCenterPopup('Download failed.');
+    }
+    return;
+  }
+
+showCenterPopup('Quota exhausted. Upgrade to Pro.');
+
+
+    // update remaining count on the page
+    const remEl = document.getElementById('basic-remaining');
+    if (remEl && data.remaining !== undefined) remEl.textContent = data.remaining;
+
+    // start the download
+    window.location.href = data.download_url;
+
+  } catch (err) {
+    console.error(err);
+    alert('Network error.');
+  }
+});
+
+
   document.querySelectorAll('img').forEach(img => {
     img.addEventListener('contextmenu', e => e.preventDefault());
     img.setAttribute('draggable', 'false');
@@ -163,6 +247,15 @@
       prompt("Copy this link:", window.location.href);
     }
   });
+
+  function showCenterPopup(message) {
+    document.getElementById('popupMessage').textContent = message;
+    document.getElementById('centerPopup').classList.remove('hidden');
+  }
+
+  function closeCenterPopup() {
+    document.getElementById('centerPopup').classList.add('hidden');
+  }
 </script>
 
 {% endblock %}

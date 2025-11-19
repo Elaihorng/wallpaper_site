@@ -13,8 +13,9 @@ urlpatterns = [
     path('download/<int:pk>/', views.download_wallpaper, name='download_wallpaper'),
     path('account/', views.account, name='account'),
     path('subscribe_page/', views.subscribe_page, name='subscribe_page'),
+    path("cancel-subscription/", views.cancel_subscription, name="cancel_subscription"),
     path('wallpaper/<int:pk>/preview/', views.preview_wallpaper, name='wallpaper_preview'),
-    
+    path('api/initiate-download/<int:pk>/', views.initiate_download, name='initiate_download'),
     path('subscribe/', views.create_checkout_session, name='subscribe'),
     path('create-checkout-session/', views.create_checkout_session, name='create_checkout_session'),
     path('stripe-webhook/', views.stripe_webhook, name='stripe_webhook'),
