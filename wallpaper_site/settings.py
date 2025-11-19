@@ -127,7 +127,8 @@ REST_FRAMEWORK = {
 # Stripe & email read from env
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
-STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID", "")
+STRIPE_BASIC_PRICE_ID = os.getenv("STRIPE_BASIC_PRICE_ID", "")
+STRIPE_PRO_PRICE_ID = os.getenv("STRIPE_PRO_PRICE_ID", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
