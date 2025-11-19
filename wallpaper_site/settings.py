@@ -63,9 +63,6 @@ WSGI_APPLICATION = "wallpaper_site.wsgi.application"
 
 # Database: prefer DATABASE_URL (dj-database-url), else explicit MySQL vars
 
-
-   
-
 if os.getenv("DATABASE_URL"):
         # parse DATABASE_URL first
         DATABASES = {"default": dj_database_url.parse(os.getenv("DATABASE_URL"), conn_max_age=600)}
