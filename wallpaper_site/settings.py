@@ -137,7 +137,7 @@ STATICFILES_DIRS = [BASE_DIR / "image"]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = "/opt/render/project/persistent/media"
 
 # Custom user model
 AUTH_USER_MODEL = "wallpapers.User"
