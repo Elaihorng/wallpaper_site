@@ -76,6 +76,11 @@ def home(request):
     print("SEARCH Q:", repr(q))   # temporary debug: watch runserver console
     return render(request, 'home.html', context)
 
+from django.core.mail import send_mail
+import logging
+
+logger = logging.getLogger(__name__)
+
 def register_view(request):
     if request.method == 'POST':
         form = RegisterForm(request.POST)
@@ -84,15 +89,35 @@ def register_view(request):
             user.is_active = True
             user.is_verified = False
             user.save()
+
             token = signer.sign(user.email)
             verify_url = request.build_absolute_uri(reverse('wallpapers:verify_email', args=[token]))
-            from django.core.mail import send_mail
-            send_mail('Verify email', f'Click: {verify_url}', None, [user.email])
-            messages.success(request, 'Account created. Check email for verification.')
+
+            # try to send verification email but never turn a network failure into a 500
+            try:
+                send_mail(
+                    subject='Verify email',
+                    message=f'Click: {verify_url}',
+                    from_email=None,
+                    recipient_list=[user.email],
+                    fail_silently=False,  # we want exceptions to be logged here, but not shown to the user
+                )
+            except Exception as exc:
+                logger.exception("Failed to send verification email for %s: %s", user.email, exc)
+                # inform the user without exposing internals
+                messages.warning(
+                    request,
+                    "Account created. We couldn't send a verification email right now — "
+                    "check your inbox later or contact support if you don't receive it."
+                )
+            else:
+                messages.success(request, 'Account created. Check email for verification.')
+
             return redirect('wallpapers:login')
     else:
         form = RegisterForm()
     return render(request, 'register.html', {'form': form})
+
 
 def verify_email(request, token):
     try:
