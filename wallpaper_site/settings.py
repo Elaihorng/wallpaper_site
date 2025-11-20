@@ -170,4 +170,12 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 # Security headers you may want to enable later
 CSP_SCRIPT_SRC = ("'self'", "'unsafe-eval'", "https://cdn.tailwindcss.com", "https://unpkg.com")
 
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = "Lax"  
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://python.pihcwk.space",
+]
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
