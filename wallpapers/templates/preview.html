@@ -192,23 +192,23 @@ document.getElementById('downloadBtn')?.addEventListener('click', async function
 
     const data = await res.json();
     if (!res.ok) {
-    if (data.error === 'quota_exhausted') {
-      showCenterPopup('Quota exhausted. Upgrade to Pro.');
-      return;
-    } 
-    else if (data.error === 'no_active_subscription') {
-      showCenterPopup('No active subscription. Please subscribe.');
-      setTimeout(() => {
-        window.location.href = "{% url 'wallpapers:subscribe_page' %}";
-      }, 1500);
-    }
-    else {
-      showCenterPopup('Download failed.');
-    }
+      if (data.error === 'quota_exhausted') {
+        showCenterPopup('You has Reached your limit. Upgrade to Pro to Download Unlimited.');
+        return;
+      } 
+      else if (data.error === 'no_active_subscription') {
+        showCenterPopup('No active subscription. Please subscribe.');
+        setTimeout(() => {
+          window.location.href = "{% url 'wallpapers:subscribe_page' %}";
+        }, 1500);
+      }
+      else {
+        showCenterPopup('Download failed.');
+      }
     return;
   }
 
-showCenterPopup('Quota exhausted. Upgrade to Pro.');
+  showCenterPopup('Quota exhausted. Upgrade to Pro.');
 
 
     // update remaining count on the page
