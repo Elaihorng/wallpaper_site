@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 
 # Map your Stripe price IDs to plan names
 PRICE_TO_PLAN = {
-    "price_1ProIdxxxx": "pro",
-    "price_1BasicIdxxxx": "basic",
+    "price_1SUt5lC0qOc2C6aBgdSnli9W": "pro",
+    "price_1SUt73C0qOc2C6aBdFlbBjFr": "basic",
     # add other price ids you use
 }
 
@@ -420,25 +420,7 @@ def preview_wallpaper(request, pk):
         'suggested': suggested,
     })
 
-import json
-import logging
-from django.conf import settings
-from django.http import HttpResponse
-from django.db import transaction
-from django.utils import timezone as dt_timezone
 
-logger = logging.getLogger(__name__)
-
-# Map your Stripe price IDs to plan names
-PRICE_TO_PLAN = {
-    "price_1ProIdxxxx": "pro",
-    "price_1BasicIdxxxx": "basic",
-    # add other price ids you use
-}
-
-# Simple idempotency using cache; optionally use DB model to persist processed event IDs.
-from django.core.cache import cache
-EVENT_CACHE_TTL = 60 * 60 * 24 * 7  # keep processed ids for 7 days
 
 
 def mark_event_processed(event_id):
