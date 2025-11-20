@@ -327,26 +327,31 @@ def subscribe_page(request):
 @require_POST
 @login_required
 def create_checkout_session(request):
-    stripe.api_key = settings.STRIPE_SECRET_KEY
+    # quick guard: make sure the secret key is actually a secret key
+    sk = getattr(settings, "STRIPE_SECRET_KEY", "") or ""
+    if not sk.startswith("sk_"):
+        logger.error("Stripe secret key missing or looks like a publishable key: %r", sk)
+        messages.error(request, "Server payment configuration error. Contact admin.")
+        # redirect to a GET page that shows subscription options
+        return redirect('wallpapers:subscribe_page')
+
+    stripe.api_key = sk
 
     plan = request.POST.get('plan')
     if plan not in ('basic', 'pro'):
         messages.error(request, "Invalid plan selected.")
-        return redirect('wallpapers:subscribe')
+        return redirect('wallpapers:subscribe_page')
 
-    # map plan -> price id from settings
     price_id = settings.STRIPE_BASIC_PRICE_ID if plan == 'basic' else settings.STRIPE_PRO_PRICE_ID
     if not price_id:
         messages.error(request, "Payment price is not configured. Contact admin.")
-        return redirect('wallpapers:subscribe')
+        return redirect('wallpapers:subscribe_page')
 
     try:
-        # build base success/cancel urls and append placeholder explicitly to avoid encoding issues
         success_base = request.build_absolute_uri(reverse('wallpapers:account'))
         success_url = success_base + '?session_id={CHECKOUT_SESSION_ID}'
-        cancel_url = request.build_absolute_uri(reverse('wallpapers:subscribe'))
+        cancel_url = request.build_absolute_uri(reverse('wallpapers:subscribe_page'))
 
-        # include client_reference_id and metadata for robust lookup later
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             mode="subscription",
@@ -358,12 +363,12 @@ def create_checkout_session(request):
             metadata={"plan": plan, "user_id": str(request.user.id)},
         )
 
-        # server-side redirect to Stripe-hosted checkout
         return redirect(checkout_session.url)
-    except Exception as e:
-        logger.exception("Failed to create checkout session: %s", e)
-        messages.error(request, f"Failed to create checkout session: {e}")
-        return redirect('wallpapers:subscribe')
+    except Exception:
+        logger.exception("Failed to create checkout session")
+        messages.error(request, "Unable to create payment session. Try again or contact support.")
+        return redirect('wallpapers:subscribe_page')
+
 
 
 def preview_wallpaper(request, pk):
@@ -422,56 +427,31 @@ def was_event_processed(event_id):
     return cache.get(key) is not None
 @csrf_exempt
 def stripe_webhook(request):
-    # must set STRIPE_WEBHOOK_SECRET = 'whsec_....' in settings
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE', '')
-
     webhook_secret = getattr(settings, 'STRIPE_WEBHOOK_SECRET', None)
-    event = None
     try:
-        if webhook_secret:
-            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-        else:
-            # no secret configured — parse payload directly (not recommended for production)
-            event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
+        if not webhook_secret:
+            logger.error("Stripe webhook secret not configured; rejecting webhook in prod")
+            return HttpResponse(status=400)
+        # ensure stripe.api_key set
+        stripe.api_key = getattr(settings, "STRIPE_SECRET_KEY", "")
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except ValueError:
-        logger.exception("Invalid payload")
         return HttpResponseBadRequest()
     except stripe.error.SignatureVerificationError:
-        logger.exception("Invalid signature")
         return HttpResponse(status=400)
 
-    kind = event.get('type')
-    data = event.get('data', {}).get('object')
+    event_id = event.get("id")
+    if not event_id or was_event_processed(event_id):
+        return HttpResponse(status=200)
 
+    # process...
     try:
-        if kind == 'checkout.session.completed':
-            # We want the checkout session with expanded subscription & customer so downstream handlers
-            # have the data they need (some stripe setups send subscription id only).
-            try:
-                session_id = data.get('id') if isinstance(data, dict) else None
-                if session_id:
-                    # expand subscription & customer to get full details
-                    full_session = stripe.checkout.Session.retrieve(session_id, expand=['subscription', 'customer'])
-                    handle_checkout_session_completed(full_session)
-                else:
-                    # fallback: pass whatever came in
-                    handle_checkout_session_completed(data)
-            except Exception:
-                logger.exception("Failed to retrieve expanded checkout.session for webhook; passing raw data")
-                handle_checkout_session_completed(data)
-
-        elif kind in ('invoice.payment_succeeded', 'customer.subscription.created', 'customer.subscription.updated'):
-            # these events include subscription object (may already be expanded)
-            # pass the subscription object directly to handler
-            subscription_obj = data
-            handle_subscription_event(subscription_obj)
-        else:
-            logger.info("Unhandled stripe event type: %s", kind)
-
+        # call handlers...
+        mark_event_processed(event_id)
     except Exception:
-        logger.exception("Error handling webhook event")
-        # return 500 so Stripe will retry
+        logger.exception("Error handling webhook")
         return HttpResponse(status=500)
 
     return HttpResponse(status=200)
