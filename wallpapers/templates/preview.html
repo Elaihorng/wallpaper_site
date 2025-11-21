@@ -180,6 +180,7 @@ document.getElementById('downloadBtn')?.addEventListener('click', async function
   e.preventDefault();
   const pk = this.dataset.pk;
   const url = "{% url 'wallpapers:initiate_download' 0 %}".replace('/0/', '/' + pk + '/');
+
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -187,39 +188,42 @@ document.getElementById('downloadBtn')?.addEventListener('click', async function
         'X-CSRFToken': csrftoken,
         'Accept': 'application/json',
       },
-      body: ''  // no body needed
+      body: ''
     });
 
     const data = await res.json();
+
     if (!res.ok) {
-        if (data.error === 'quota_exhausted') {
-          showCenterPopup('You has Reached your limit. Upgrade to Pro to Download Unlimited.');
-          return;
-        } 
-        else if (data.error === 'no_active_subscription') {
-          showCenterPopup('No active subscription. Please subscribe.');
-          setTimeout(() => {
-            window.location.href = "{% url 'wallpapers:subscribe_page' %}";
-          }, 1500);
-        }
-        else {
-          showCenterPopup('Download failed.');
-        }
-        return;
+      if (data.error === 'quota_exhausted') {
+        showCenterPopup('You has Reached your limit. Upgrade to Pro to Download Unlimited.');
+      } else if (data.error === 'no_active_subscription') {
+        showCenterPopup('No active subscription. Please subscribe.');
+        setTimeout(() => {
+          window.location.href = "{% url 'wallpapers:subscribe_page' %}";
+        }, 1500);
+      } else {
+        showCenterPopup('Download failed.');
+      }
+      return;
     }
 
     // update remaining count on the page
     const remEl = document.getElementById('basic-remaining');
     if (remEl && data.remaining !== undefined) remEl.textContent = data.remaining;
 
-    // start the download
-    window.location.href = data.download_url;
+    // ✅ use the correct key from Django
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      console.error('No url in response:', data);
+    }
 
   } catch (err) {
     console.error(err);
     alert('Network error.');
   }
 });
+
 
 
   document.querySelectorAll('img').forEach(img => {
