@@ -388,18 +388,16 @@ def create_checkout_session(request):
         sub = getattr(request.user, "subscription", None)
         if sub and sub.plan == "basic" and sub.stripe_subscription_id:
             try:
-                # cancel old subscription immediately
-                stripe.Subscription.modify(
-                    sub.stripe_subscription_id,
-                    cancel_at_period_end=False
-                )
+                # ❗ Cancel the old Basic subscription immediately on Stripe
+                stripe.Subscription.delete(sub.stripe_subscription_id)
 
-                # update DB
+                # Update your DB to reflect it
                 sub.status = "canceled"
                 sub.save(update_fields=["status"])
-                logger.info("Canceled old basic plan for user %s", request.user)
 
-            except Exception as e:
+                logger.info("Canceled old basic subscription %s for user %s",
+                            sub.stripe_subscription_id, request.user)
+            except Exception:
                 logger.exception("Failed to cancel old Stripe subscription for user %s", request.user)
                 messages.error(request, "Unable to cancel your old plan. Contact support.")
                 return redirect('wallpapers:account')
