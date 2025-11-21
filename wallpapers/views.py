@@ -357,16 +357,14 @@ def subscribe_page(request):
     return render(request, 'subscribe_page.html', {
         'stripe_public_key': settings.STRIPE_PUBLIC_KEY,
     })
-
 @require_POST
 @login_required
 def create_checkout_session(request):
-    # quick guard: make sure the secret key is actually a secret key
+    # ensure secret key is valid
     sk = getattr(settings, "STRIPE_SECRET_KEY", "") or ""
     if not sk.startswith("sk_"):
-        logger.error("Stripe secret key missing or looks like a publishable key: %r", sk)
+        logger.error("Stripe secret key missing or invalid: %r", sk)
         messages.error(request, "Server payment configuration error. Contact admin.")
-        # redirect to a GET page that shows subscription options
         return redirect('wallpapers:subscribe_page')
 
     stripe.api_key = sk
@@ -376,11 +374,39 @@ def create_checkout_session(request):
         messages.error(request, "Invalid plan selected.")
         return redirect('wallpapers:subscribe_page')
 
+    # get correct price id
     price_id = settings.STRIPE_BASIC_PRICE_ID if plan == 'basic' else settings.STRIPE_PRO_PRICE_ID
     if not price_id:
         messages.error(request, "Payment price is not configured. Contact admin.")
         return redirect('wallpapers:subscribe_page')
 
+
+    # ------------------------------------------------------------------
+    # 🔥 AUTO-CANCEL BASIC PLAN IF UPGRADING TO PRO
+    # ------------------------------------------------------------------
+    if plan == "pro":
+        sub = getattr(request.user, "subscription", None)
+        if sub and sub.plan == "basic" and sub.stripe_subscription_id:
+            try:
+                # cancel old subscription immediately
+                stripe.Subscription.modify(
+                    sub.stripe_subscription_id,
+                    cancel_at_period_end=False
+                )
+
+                # update DB
+                sub.status = "canceled"
+                sub.save(update_fields=["status"])
+                logger.info("Canceled old basic plan for user %s", request.user)
+
+            except Exception as e:
+                logger.exception("Failed to cancel old Stripe subscription for user %s", request.user)
+                messages.error(request, "Unable to cancel your old plan. Contact support.")
+                return redirect('wallpapers:account')
+
+    # ------------------------------------------------------------------
+    # 🔥 CREATE CHECKOUT SESSION
+    # ------------------------------------------------------------------
     try:
         success_base = request.build_absolute_uri(reverse('wallpapers:account'))
         success_url = success_base + '?session_id={CHECKOUT_SESSION_ID}'
@@ -398,10 +424,12 @@ def create_checkout_session(request):
         )
 
         return redirect(checkout_session.url)
+
     except Exception:
         logger.exception("Failed to create checkout session")
         messages.error(request, "Unable to create payment session. Try again or contact support.")
         return redirect('wallpapers:subscribe_page')
+
 
 
 
