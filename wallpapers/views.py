@@ -175,50 +175,54 @@ def upload_wallpaper(request, pk):
 @require_POST
 @login_required
 def initiate_download(request, pk):
-    # same checks as your download view but atomic and returns json
     try:
         w = Wallpaper.objects.get(pk=pk)
     except Wallpaper.DoesNotExist:
         return JsonResponse({'error': 'not_found'}, status=404)
 
-    if w.is_premium:
-        sub = getattr(request.user, 'subscription', None)
-        if not sub or sub.status != 'active':
-            return JsonResponse({'error': 'no_active_subscription'}, status=403)
+    # Free wallpaper → allow without logging quota
+    if not w.is_premium:
+        DownloadLog.objects.create(user=request.user, wallpaper=w)
+        return JsonResponse({'ok': True})
 
-        if sub.plan == 'basic':
-            try:
-                with transaction.atomic():
-                    locked_sub = Subscription.objects.select_for_update().get(pk=sub.pk)
-                    remaining = locked_sub.downloads_remaining() or 0
-                    if remaining <= 0:
-                        return JsonResponse({'error': 'quota_exhausted'}, status=403)
+    # Premium wallpaper
+    sub = getattr(request.user, 'subscription', None)
+    if not sub or sub.status != 'active':
+        return JsonResponse({'error': 'no_active_subscription'}, status=403)
 
-                    # log and increment
-                    DownloadLog.objects.create(user=request.user, wallpaper=w)
-                    if locked_sub.downloads_used is None:
-                        Subscription.objects.filter(pk=locked_sub.pk).update(downloads_used=0)
-                    Subscription.objects.filter(pk=locked_sub.pk).update(
-                        downloads_used=F('downloads_used') + 1
-                    )
-                    locked_sub.refresh_from_db()
-                    remaining = locked_sub.downloads_remaining() or 0
-            except Exception:
-                logger.exception("initiate_download error")
-                return JsonResponse({'error': 'internal_error'}, status=500)
-    else:
-        # free or pro: optional logging
+    # Basic plan → limit downloads
+    if sub.plan == 'basic':
         try:
-            DownloadLog.objects.create(user=request.user, wallpaper=w)
-        except Exception:
-            pass
-        sub = getattr(request.user, 'subscription', None)
-        remaining = sub.downloads_remaining() if sub and hasattr(sub, 'downloads_remaining') else None
-        remaining = remaining or 0
+            with transaction.atomic():
+                locked_sub = Subscription.objects.select_for_update().get(pk=sub.pk)
+                remaining = locked_sub.downloads_remaining() or 0
 
-    # build URL to actual download view (keeps existing permission checks there)
-    download_url = request.build_absolute_uri(reverse('wallpapers:download_wallpaper', args=[w.pk]))
-    return JsonResponse({'download_url': download_url, 'remaining': remaining})
+                if remaining <= 0:
+                    return JsonResponse({'error': 'quota_exhausted'}, status=403)
+
+                DownloadLog.objects.create(user=request.user, wallpaper=w)
+
+                if locked_sub.downloads_used is None:
+                    locked_sub.downloads_used = 0
+                    locked_sub.save(update_fields=['downloads_used'])
+
+                Subscription.objects.filter(pk=sub.pk).update(
+                    downloads_used=F('downloads_used') + 1
+                )
+
+                locked_sub.refresh_from_db()
+                remaining = locked_sub.downloads_remaining() or 0
+
+        except Exception:
+            logger.exception("initiate_download error")
+            return JsonResponse({'error': 'internal_error'}, status=500)
+
+        return JsonResponse({'ok': True, 'remaining': remaining})
+
+    # Pro plan → unlimited downloads
+    DownloadLog.objects.create(user=request.user, wallpaper=w)
+    return JsonResponse({'ok': True, 'remaining': 'unlimited'})
+
 def _extract_period_end_from_stripe_sub(stripe_sub):
     """
     Given a stripe subscription dict/object, try multiple ways to get an epoch
@@ -321,14 +325,14 @@ def download_wallpaper(request, pk):
                         downloads_used=F('downloads_used') + 1
                     )
 
-                    return _serve_file_response(w)
+                return _serve_file_response(w)
 
         except Subscription.DoesNotExist:
             logger.exception("Subscription missing during download for user %s", request.user)
         except Exception:
             logger.exception("Error processing basic-plan download for user %s", request.user)
 
-        messages.warning(request, "Your Basic plan download quota is exhausted. Upgrade to Pro for unlimited downloads.")
+        # messages.warning(request, "Your Basic plan download quota is exhausted. Upgrade to Pro for unlimited downloads.")
         return redirect('wallpapers:account')
 
     # default deny
