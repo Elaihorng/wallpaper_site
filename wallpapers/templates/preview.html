@@ -100,7 +100,7 @@
     {% if w.is_premium %}
       {% if not request.user.is_authenticated %}
         <!-- guest: prompt login/register -->
-        <div class="flex items-center justify-center">
+        <div class="absolute inset-0 flex items-center justify-center">
           <div class="backdrop-blur-md bg-black/50 text-white p-6 rounded-lg text-center max-w-lg">
             <p class="text-lg mb-4">Premium image — subscribe to download</p>
             <div class="flex items-center justify-center gap-3">
@@ -116,11 +116,11 @@
         {% with sub=request.user.subscription %}
           {% if not sub or sub.status != 'active' %}
             <!-- logged-in but not active subscriber: prompt subscribe -->
-            <div class="absolute inset-0 flex items-center justify-center">
-              <div class="backdrop-blur-md bg-black/50 text-white p-6 rounded-lg text-center max-w-lg">
+            <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div class="pointer-events-auto backdrop-blur-md bg-black/50 text-white p-6 rounded-lg text-center max-w-lg">
                 <p class="text-lg mb-4">Premium image — subscribe to download</p>
                 <a href="{% url 'wallpapers:subscribe_page' %}"
-                   class="px-4 py-2 rounded bg-emerald-600 text-white inline-block">Subscribe</a>
+                  class="px-4 py-2 rounded bg-emerald-600 text-white inline-block">Subscribe</a>
               </div>
             </div>
           {% endif %}

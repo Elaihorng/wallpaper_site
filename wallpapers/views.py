@@ -26,6 +26,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from datetime import datetime, timezone as dt_timezone
 import logging
+from django.urls import reverse
 from urllib.parse import unquote
 from .models import Subscription
 from django.utils import timezone
@@ -180,17 +181,18 @@ def initiate_download(request, pk):
     except Wallpaper.DoesNotExist:
         return JsonResponse({'error': 'not_found'}, status=404)
 
-    # Free wallpaper → allow without logging quota
+    # ---- FREE ----
     if not w.is_premium:
         DownloadLog.objects.create(user=request.user, wallpaper=w)
-        return JsonResponse({'ok': True})
+        download_url = reverse('wallpapers:download_wallpaper', args=[w.pk])
+        return JsonResponse({'ok': True, 'url': download_url})
 
-    # Premium wallpaper
+    # ---- PREMIUM ----
     sub = getattr(request.user, 'subscription', None)
     if not sub or sub.status != 'active':
         return JsonResponse({'error': 'no_active_subscription'}, status=403)
 
-    # Basic plan → limit downloads
+    # ---- BASIC ----
     if sub.plan == 'basic':
         try:
             with transaction.atomic():
@@ -217,11 +219,14 @@ def initiate_download(request, pk):
             logger.exception("initiate_download error")
             return JsonResponse({'error': 'internal_error'}, status=500)
 
-        return JsonResponse({'ok': True, 'remaining': remaining})
+        download_url = reverse('wallpapers:download_wallpaper', args=[w.pk])
+        return JsonResponse({'ok': True, 'url': download_url, 'remaining': remaining})
 
-    # Pro plan → unlimited downloads
+    # ---- PRO ----
     DownloadLog.objects.create(user=request.user, wallpaper=w)
-    return JsonResponse({'ok': True, 'remaining': 'unlimited'})
+    download_url = reverse('wallpapers:download_wallpaper', args=[w.pk])
+    return JsonResponse({'ok': True, 'url': download_url, 'remaining': 'unlimited'})
+
 
 def _extract_period_end_from_stripe_sub(stripe_sub):
     """
